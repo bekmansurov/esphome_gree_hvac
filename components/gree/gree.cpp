@@ -7,20 +7,19 @@ namespace gree {
 
 static const char *const TAG = "gree";
 
+// block of byte positions in requests/answers
 static const uint8_t FORCE_UPDATE = 7;
 static const uint8_t MODE = 8;
 static const uint8_t MODE_MASK = 0b11110000;
 static const uint8_t FAN_MASK = 0b00001111;
-
 static const uint8_t SWING = 12;
-
 // change later to data_read/write sizeof ?
 static const uint8_t CRC_WRITE = 46;
 static const uint8_t CRC_READ = 49;
-
 static const uint8_t TEMPERATURE = 9;
 static const uint8_t INDOOR_TEMPERATURE = 46;
 
+// component settings
 static const uint8_t MIN_VALID_TEMPERATURE = 16;
 static const uint8_t MAX_VALID_TEMPERATURE = 30;
 static const uint8_t TEMPERATURE_STEP = 1;
@@ -56,8 +55,8 @@ void GreeClimate::setup() {
 */
 
 void GreeClimate::update() {
-  data_write_empty_[CRC_WRITE] = get_checksum_(data_write_empty_, sizeof(data_write_empty_));
-  send_data_(data_write_empty_, sizeof(data_write_empty_));
+  data_write_[CRC_WRITE] = get_checksum_(data_write_, sizeof(data_write_));
+  send_data_(data_write_, sizeof(data_write_));
 }
 
 climate::ClimateTraits GreeClimate::traits() {
@@ -94,7 +93,6 @@ climate::ClimateTraits GreeClimate::traits() {
 }
 
 void GreeClimate::read_state_(const uint8_t *data, uint8_t size) {
-  static uint8_t previous_mode_fan_ = 0;
 
   uint8_t check = data[CRC_READ];
   uint8_t crc = get_checksum_(data, size);
@@ -106,12 +104,13 @@ void GreeClimate::read_state_(const uint8_t *data, uint8_t size) {
   this->target_temperature = data[TEMPERATURE] / 16 + MIN_VALID_TEMPERATURE;
   this->current_temperature = data[INDOOR_TEMPERATURE] - 40; // check later?
 
-  // split MODE byte to mode and fan-speed parts && save them
-  data_save_[0] = data[MODE] & MODE_MASK;
-  data_save_[1] = data[MODE] & FAN_MASK;
+  // partially saving current state to control string
+  data_write_[MODE] = data[MODE];
+  // add target temperature state too? ok
+  data_write_[TEMPERATURE] = data[TEMPERATURE];
 
-  // get current AC MODE from its response
-  switch (data_save_[0]) {
+  // update CLIMATE state according AC response
+  switch (data[MODE] & MODE_MASK) {
     case AC_MODE_OFF:
       this->mode = climate::CLIMATE_MODE_OFF;
       break;
@@ -131,12 +130,11 @@ void GreeClimate::read_state_(const uint8_t *data, uint8_t size) {
       this->mode = climate::CLIMATE_MODE_HEAT;
       break;
     default:
-      // ???
-      this->mode = climate::CLIMATE_MODE_AUTO;
+      ESP_LOGW(TAG, "Unknown AC MODE&fan: %s", data[MODE]);
   }
 
   // get current AC FAN SPEED from its response
-  switch (data_save_[1]) {
+  switch (data[MODE] & FAN_MASK) {
     case AC_FAN_AUTO:
       this->fan_mode = climate::CLIMATE_FAN_AUTO;
       break;
@@ -150,7 +148,7 @@ void GreeClimate::read_state_(const uint8_t *data, uint8_t size) {
       this->fan_mode = climate::CLIMATE_FAN_HIGH;
       break;
     default:
-      this->fan_mode = climate::CLIMATE_FAN_AUTO;
+      ESP_LOGW(TAG, "Unknown AC modeE&FAN: %s", data[MODE]);
   }
 
   /*
@@ -185,18 +183,7 @@ void GreeClimate::read_state_(const uint8_t *data, uint8_t size) {
 }
 
 void GreeClimate::control(const climate::ClimateCall &call) {
-  // Parts of the message that must have specific values for "send" command.
-  // These are not 0x00 and the meaning of those values is unknown at the moment.
-  // Others set to 0x00
-  data_write_[0] = 126; // header
-  data_write_[1] = 126; // header
-  data_write_[2] = 44; // packet length
-  data_write_[3] = 1; // always 0x01
-  data_write_[10] = 2; // display? save from read_state? TODO
-  data_write_[11] = 2; // always 0x02
-  // data_write_[41] = 12; // unknown but not 0x00. TODO
   data_write_[FORCE_UPDATE] = 175;
-  // maybe change update byte to usual state 0x00 but i dont need it if empty data_write var is used
   
 /*
   // logging of saved mode&fan vars
@@ -208,8 +195,9 @@ void GreeClimate::control(const climate::ClimateCall &call) {
   ESP_LOGV(TAG, "SAVED: %s", str);
 */
 
-  uint8_t new_mode = data_save_[0];
-  uint8_t new_fan_speed = data_save_[1];
+  // saving mode&fan values from previous 
+  uint8_t new_mode = data_write_[MODE] & MODE_MASK;
+  uint8_t new_fan_speed = data_write_[MODE] & FAN_MASK;
 
   if (call.get_mode().has_value()) {
     switch (call.get_mode().value()) {
@@ -224,8 +212,6 @@ void GreeClimate::control(const climate::ClimateCall &call) {
         break;
       case climate::CLIMATE_MODE_DRY:
         new_mode = AC_MODE_DRY;
-        new_fan_speed = AC_FAN_LOW;
-        // only LOW fan speed in DRY mode. set it at once!
         break;
       case climate::CLIMATE_MODE_FAN_ONLY:
         new_mode = AC_MODE_FANONLY;
@@ -256,6 +242,11 @@ void GreeClimate::control(const climate::ClimateCall &call) {
       default: // add warning to log?
         break;
     }
+  }
+  
+  // set low speed when DRY mode because other speeds are not available
+  if (new_mode == AC_MODE_DRY && new_fan_speed != AC_FAN_LOW) {
+    new_fan_speed = AC_FAN_LOW;
   }
 
   /*
@@ -292,13 +283,14 @@ void GreeClimate::control(const climate::ClimateCall &call) {
     }
   }
 
-  data_save_[0] = new_mode;
-  data_save_[1] = new_fan_speed;
   data_write_[MODE] = new_mode + new_fan_speed;
 
   // compute checksum & send data
   data_write_[CRC_WRITE] = get_checksum_(data_write_, sizeof(data_write_));
   send_data_(data_write_, sizeof(data_write_));
+
+  // change of force_update byte to "passive" state
+  data_write_[FORCE_UPDATE] = 0;
 }
 
 void GreeClimate::send_data_(const uint8_t *message, uint8_t size) {
@@ -321,7 +313,7 @@ uint8_t GreeClimate::get_checksum_(const uint8_t *message, size_t size) {
   // position of crc in packet
   uint8_t position = size - 1;
   uint8_t sum = 0;
-  // ignore first 2 bytes & last
+  // ignore first 2 bytes & last one
   for (int i = 2; i < position; i++)
     sum += message[i];
   uint8_t crc = sum % 256;

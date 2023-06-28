@@ -18,9 +18,9 @@ external_components:
 
 logger:
     level: INFO
-    # level: DEBUG
-    # level: VERY_VERBOSE
-    # level: VERBOSE
+    #level: DEBUG
+    #level: VERY_VERBOSE
+    #level: VERBOSE
     baud_rate: 0  
 
 api:

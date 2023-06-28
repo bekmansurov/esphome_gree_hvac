@@ -36,11 +36,10 @@ CONFIG_SCHEMA = cv.All(
             # ),
         }
     )
-    # changed from 5s (based on Haier component)
+    # wifi module polls every 300ms but do we need it so often? set to 10s
     .extend(cv.polling_component_schema("10s"))
     .extend(uart.UART_DEVICE_SCHEMA),
 )
-
 
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
