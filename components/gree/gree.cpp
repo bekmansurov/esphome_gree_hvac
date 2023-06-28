@@ -104,7 +104,7 @@ void GreeClimate::read_state_(const uint8_t *data, uint8_t size) {
   this->target_temperature = data[TEMPERATURE] / 16 + MIN_VALID_TEMPERATURE;
   this->current_temperature = data[INDOOR_TEMPERATURE] - 40; // check later?
 
-  // partially saving current state to control string
+  // partially saving current state to previous request
   data_write_[MODE] = data[MODE];
   // add target temperature state too? ok
   data_write_[TEMPERATURE] = data[TEMPERATURE];
@@ -148,7 +148,7 @@ void GreeClimate::read_state_(const uint8_t *data, uint8_t size) {
       this->fan_mode = climate::CLIMATE_FAN_HIGH;
       break;
     default:
-      ESP_LOGW(TAG, "Unknown AC modeE&FAN: %s", data[MODE]);
+      ESP_LOGW(TAG, "Unknown AC mode&FAN: %s", data[MODE]);
   }
 
   /*
@@ -212,6 +212,7 @@ void GreeClimate::control(const climate::ClimateCall &call) {
         break;
       case climate::CLIMATE_MODE_DRY:
         new_mode = AC_MODE_DRY;
+        new_fan_speed = AC_FAN_LOW;
         break;
       case climate::CLIMATE_MODE_FAN_ONLY:
         new_mode = AC_MODE_FANONLY;
@@ -219,13 +220,14 @@ void GreeClimate::control(const climate::ClimateCall &call) {
       case climate::CLIMATE_MODE_HEAT:
         new_mode = AC_MODE_HEAT;
         break;
-      default: // add warning to log?
+      default:
+        ESP_LOGW(TAG, "Setting of unsupported MODE: %s", call.get_mode().value());
         break;
     }
   }
 
   // set fan speed only if MODE != DRY (only LOW available)
-  if (call.get_fan_mode().has_value() && new_mode != AC_MODE_DRY) {
+  if (call.get_fan_mode().has_value()) {
     switch (call.get_fan_mode().value()) {
       case climate::CLIMATE_FAN_AUTO:
         new_fan_speed = AC_FAN_AUTO;
@@ -239,13 +241,15 @@ void GreeClimate::control(const climate::ClimateCall &call) {
       case climate::CLIMATE_FAN_HIGH:
         new_fan_speed = AC_FAN_HIGH;
         break;
-      default: // add warning to log?
+      default:
+        ESP_LOGW(TAG, "Setting of unsupported FANSPEED: %s", call.get_fan_mode().value());
         break;
     }
   }
   
   // set low speed when DRY mode because other speeds are not available
   if (new_mode == AC_MODE_DRY && new_fan_speed != AC_FAN_LOW) {
+    // ESP_LOGW(TAG, "DRY mode exception: %s", new_fan_speed);
     new_fan_speed = AC_FAN_LOW;
   }
 
