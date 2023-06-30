@@ -53,6 +53,26 @@ enum ac_louver_H: uint8_t {
   AC_LOUVERH_SWING_MIDDLE_TO_TOP = 0xB0
 };
 
+#define GREE_START_BYTE 0x7E
+
+union gree_start_bytes_t {
+    uint16_t u16;
+    uint8_t u8x2[2];
+};
+
+struct gree_header_t
+{
+  gree_start_bytes_t start_bytes;
+  uint8_t data_length;
+};
+
+struct gree_raw_packet_t
+{
+  gree_header_t header;
+  uint8_t data[1]; // first data byte
+}
+
+
 /*
 class Constants {
   public:
@@ -88,7 +108,9 @@ class GreeClimate : public climate::Climate, public uart::UARTDevice, public Pol
   // Others set to 0x00
   // data_write_[41] = 12; // unknown but not 0x00. TODO
   uint8_t data_write_[47] = {0x7E, 0x7E, 0x2C, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-  uint8_t data_read_[50];
+  uint8_t data_read_[50] = {0};
+
+  bool receiving_packet_ = false;
   // std::set<climate::ClimateSwingMode> supported_swing_modes_{};
 };
 
