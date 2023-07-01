@@ -86,8 +86,11 @@ climate::ClimateTraits GreeClimate::traits() {
   traits.set_supports_current_temperature(true);
   traits.set_supports_two_point_target_temperature(false);
 
-  // traits.add_supported_preset(climate::CLIMATE_PRESET_NONE);
-  // traits.add_supported_preset(climate::CLIMATE_PRESET_COMFORT);
+  traits.set_supported_presets(this->supported_presets_);
+
+  traits.add_supported_preset(climate::CLIMATE_PRESET_NONE);
+  traits.add_supported_preset(climate::CLIMATE_PRESET_BOOST);
+  traits.add_supported_preset(climate::CLIMATE_PRESET_SLEEP);
 
   return traits;
 }
@@ -97,7 +100,7 @@ void GreeClimate::read_state_(const uint8_t *data, uint8_t size) {
   uint8_t check = data[CRC_READ];
   uint8_t crc = get_checksum_(data, size);
   if (check != crc) {
-    ESP_LOGW(TAG, "Invalid checksum");
+    ESP_LOGW(TAG, "Invalid checksum.");
     return;
   }
 
@@ -253,15 +256,31 @@ void GreeClimate::control(const climate::ClimateCall &call) {
     new_fan_speed = AC_FAN_LOW;
   }
 
-  /*
   if (call.get_preset().has_value()) {
-    if (call.get_preset().value() == climate::CLIMATE_PRESET_COMFORT) {
+    switch (call.get_preset().value()) {
+      case climate::CLIMATE_PRESET_NONE:
+        // something
+        break;
+      case climate::CLIMATE_PRESET_BOOST:
+        // something
+        break;
+      case climate::CLIMATE_PRESET_SLEEP:
+        // something
+        break;
+      default:
+        // something
+        break;
+    }
+  }
+
+/*
+  if (call.get_preset().value() == climate::CLIMATE_PRESET_NONE) {
       data_[POWER] |= COMFORT_PRESET_MASK;
     } else {
       data_[POWER] &= ~COMFORT_PRESET_MASK;
     }
   }
-  */
+*/
 
   if (call.get_target_temperature().has_value()) {
     // check if temperature set in valid limits

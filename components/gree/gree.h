@@ -69,6 +69,7 @@ class GreeClimate : public climate::Climate, public uart::UARTDevice, public Pol
   void update() override;
   void dump_config() override;
   void control(const climate::ClimateCall &call) override;
+  void set_supported_presets(const std::set<climate::ClimatePreset> &presets) { this->supported_presets_ = presets; }
   // void set_supported_swing_modes(const std::set<climate::ClimateSwingMode> &modes) {
   //   this->supported_swing_modes_ = modes;
   // }
@@ -89,6 +90,7 @@ class GreeClimate : public climate::Climate, public uart::UARTDevice, public Pol
   // data_write_[41] = 12; // unknown but not 0x00. TODO
   uint8_t data_write_[47] = {0x7E, 0x7E, 0x2C, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
   uint8_t data_read_[50];
+  std::set<climate::ClimatePreset> supported_presets_{};
   // std::set<climate::ClimateSwingMode> supported_swing_modes_{};
 };
 
