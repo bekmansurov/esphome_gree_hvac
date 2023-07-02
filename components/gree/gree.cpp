@@ -90,7 +90,7 @@ climate::ClimateTraits GreeClimate::traits() {
 
   traits.add_supported_preset(climate::CLIMATE_PRESET_NONE);
   traits.add_supported_preset(climate::CLIMATE_PRESET_BOOST);
-  traits.add_supported_preset(climate::CLIMATE_PRESET_SLEEP);
+  // traits.add_supported_preset(climate::CLIMATE_PRESET_SLEEP);
 
   return traits;
 }
@@ -174,19 +174,27 @@ void GreeClimate::read_state_(const uint8_t *data, uint8_t size) {
   }
   */
 
-  /*
-  if (data[POWER] & COMFORT_PRESET_MASK) {
-    this->preset = climate::CLIMATE_PRESET_COMFORT;
-  } else {
-    this->preset = climate::CLIMATE_PRESET_NONE;
+  switch (data[10]) {
+    case 7:
+      // when COOL TURBO
+      this->preset = climate::CLIMATE_PRESET_BOOST;
+      break;
+    case 15:
+      // when HEAT TURBO
+      this->preset = climate::CLIMATE_PRESET_BOOST;
+      break;
+    default:
+      this->preset = climate::CLIMATE_PRESET_NONE;
+      break;
   }
-  */
 
   this->publish_state();
 }
 
 void GreeClimate::control(const climate::ClimateCall &call) {
   data_write_[FORCE_UPDATE] = 175;
+  // show current temperature on display every time when sending new command. TEST!
+  data_write_[13] = 0x20;
   
 /*
   // logging of saved mode&fan vars
@@ -259,16 +267,25 @@ void GreeClimate::control(const climate::ClimateCall &call) {
   if (call.get_preset().has_value()) {
     switch (call.get_preset().value()) {
       case climate::CLIMATE_PRESET_NONE:
-        // something
+        if (new_mode == AC_MODE_COOL) {
+          data_write_[10] = 6;
+        } else if (new_mode == AC_MODE_HEAT) {
+          data_write_[10] = 14;
+        }
         break;
       case climate::CLIMATE_PRESET_BOOST:
-        // something
+        if (new_mode == AC_MODE_COOL) {
+          data_write_[10] = 7;
+        } else if (new_mode == AC_MODE_HEAT) {
+          data_write_[10] = 15;
+        }
+        // skip preset when not COOL or HEAT mode
         break;
       case climate::CLIMATE_PRESET_SLEEP:
         // something
         break;
       default:
-        // something
+        // something?
         break;
     }
   }

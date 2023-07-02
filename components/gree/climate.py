@@ -31,7 +31,7 @@ GreeClimate = gree_ns.class_(
 ALLOWED_CLIMATE_PRESETS = {
     "NONE": ClimatePreset.CLIMATE_PRESET_NONE,
     "BOOST": ClimatePreset.CLIMATE_PRESET_BOOST,
-    "SLEEP": ClimatePreset.CLIMATE_PRESET_SLEEP,
+    # "SLEEP": ClimatePreset.CLIMATE_PRESET_SLEEP,
 }
 validate_presets = cv.enum(ALLOWED_CLIMATE_PRESETS, upper=True)
 
