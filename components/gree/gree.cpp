@@ -131,8 +131,11 @@ climate::ClimateTraits GreeClimate::traits() {
   traits.set_supports_current_temperature(true);
   traits.set_supports_two_point_target_temperature(false);
 
-  // traits.add_supported_preset(climate::CLIMATE_PRESET_NONE);
-  // traits.add_supported_preset(climate::CLIMATE_PRESET_COMFORT);
+  traits.set_supported_presets(this->supported_presets_);
+
+  traits.add_supported_preset(climate::CLIMATE_PRESET_NONE);
+  traits.add_supported_preset(climate::CLIMATE_PRESET_BOOST);
+  // traits.add_supported_preset(climate::CLIMATE_PRESET_SLEEP);
 
   return traits;
 }
@@ -142,7 +145,7 @@ void GreeClimate::read_state_(const uint8_t *data, uint8_t size) {
   uint8_t check = data[CRC_READ];
   uint8_t crc = get_checksum_(data, size);
   if (check != crc) {
-    ESP_LOGW(TAG, "Invalid checksum");
+    ESP_LOGW(TAG, "Invalid checksum.");
     return;
   }
 
@@ -216,19 +219,27 @@ void GreeClimate::read_state_(const uint8_t *data, uint8_t size) {
   }
   */
 
-  /*
-  if (data[POWER] & COMFORT_PRESET_MASK) {
-    this->preset = climate::CLIMATE_PRESET_COMFORT;
-  } else {
-    this->preset = climate::CLIMATE_PRESET_NONE;
+  switch (data[10]) {
+    case 7:
+      // when COOL TURBO
+      this->preset = climate::CLIMATE_PRESET_BOOST;
+      break;
+    case 15:
+      // when HEAT TURBO
+      this->preset = climate::CLIMATE_PRESET_BOOST;
+      break;
+    default:
+      this->preset = climate::CLIMATE_PRESET_NONE;
+      break;
   }
-  */
 
   this->publish_state();
 }
 
 void GreeClimate::control(const climate::ClimateCall &call) {
   data_write_[FORCE_UPDATE] = 175;
+  // show current temperature on display every time when sending new command. TEST!
+  data_write_[13] = 0x20;
   
 /*
   // logging of saved mode&fan vars
@@ -298,15 +309,40 @@ void GreeClimate::control(const climate::ClimateCall &call) {
     new_fan_speed = AC_FAN_LOW;
   }
 
-  /*
   if (call.get_preset().has_value()) {
-    if (call.get_preset().value() == climate::CLIMATE_PRESET_COMFORT) {
+    switch (call.get_preset().value()) {
+      case climate::CLIMATE_PRESET_NONE:
+        if (new_mode == AC_MODE_COOL) {
+          data_write_[10] = 6;
+        } else if (new_mode == AC_MODE_HEAT) {
+          data_write_[10] = 14;
+        }
+        break;
+      case climate::CLIMATE_PRESET_BOOST:
+        if (new_mode == AC_MODE_COOL) {
+          data_write_[10] = 7;
+        } else if (new_mode == AC_MODE_HEAT) {
+          data_write_[10] = 15;
+        }
+        // skip preset when not COOL or HEAT mode
+        break;
+      case climate::CLIMATE_PRESET_SLEEP:
+        // something
+        break;
+      default:
+        // something?
+        break;
+    }
+  }
+
+/*
+  if (call.get_preset().value() == climate::CLIMATE_PRESET_NONE) {
       data_[POWER] |= COMFORT_PRESET_MASK;
     } else {
       data_[POWER] &= ~COMFORT_PRESET_MASK;
     }
   }
-  */
+*/
 
   if (call.get_target_temperature().has_value()) {
     // check if temperature set in valid limits

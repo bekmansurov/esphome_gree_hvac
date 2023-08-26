@@ -54,10 +54,10 @@ enum ac_louver_H: uint8_t {
 };
 
 #define GREE_START_BYTE 0x7E
-#define GREE_RX_BUFFER_SIZE 50
+#define GREE_RX_BUFFER_SIZE 52
 
 union gree_start_bytes_t {
-    uint16_t u16;
+//     uint16_t u16;
     uint8_t u8x2[2];
 };
 
@@ -90,6 +90,7 @@ class GreeClimate : public climate::Climate, public uart::UARTDevice, public Pol
   void update() override;
   void dump_config() override;
   void control(const climate::ClimateCall &call) override;
+  void set_supported_presets(const std::set<climate::ClimatePreset> &presets) { this->supported_presets_ = presets; }
   // void set_supported_swing_modes(const std::set<climate::ClimateSwingMode> &modes) {
   //   this->supported_swing_modes_ = modes;
   // }
@@ -112,6 +113,8 @@ class GreeClimate : public climate::Climate, public uart::UARTDevice, public Pol
   uint8_t data_read_[GREE_RX_BUFFER_SIZE] = {0};
 
   bool receiving_packet_ = false;
+
+  std::set<climate::ClimatePreset> supported_presets_{};
   // std::set<climate::ClimateSwingMode> supported_swing_modes_{};
 };
 
