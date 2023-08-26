@@ -16,9 +16,11 @@ static const uint8_t MODE = 8;
 static const uint8_t MODE_MASK = 0b11110000;
 static const uint8_t FAN_MASK = 0b00001111;
 static const uint8_t SWING = 12;
-// change later to data_read/write sizeof ?
+
 static const uint8_t CRC_WRITE = 46;
-static const uint8_t CRC_READ = 49;
+//CRC_READ moved to read_state_ with last bytes because of different length of incoming packets
+//static const uint8_t CRC_READ = 49;
+
 static const uint8_t TEMPERATURE = 9;
 static const uint8_t INDOOR_TEMPERATURE = 46;
 
@@ -117,10 +119,12 @@ climate::ClimateTraits GreeClimate::traits() {
 }
 
 void GreeClimate::read_state_(const uint8_t *data, uint8_t size) {
+  // get checksum byte from received data (using the last byte)
+  uint8_t data_crc = data[size-1];
+  // get checksum byte based on received data (calculating)
+  uint8_t get_crc = get_checksum_(data, size);
 
-  uint8_t check = data[CRC_READ];
-  uint8_t crc = get_checksum_(data, size);
-  if (check != crc) {
+  if (data_crc != get_crc) {
     ESP_LOGW(TAG, "Invalid checksum.");
     return;
   }
