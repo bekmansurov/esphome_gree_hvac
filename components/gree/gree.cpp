@@ -33,41 +33,24 @@ void GreeClimate::dump_config() {
   ESP_LOGCONFIG(TAG, "  Update interval: %u", this->get_update_interval());
   this->dump_traits_(TAG);
   this->check_uart_settings(4800, 1, uart::UART_CONFIG_PARITY_EVEN, 8);
-  
 }
 
 void GreeClimate::loop() {
   gree_raw_packet_t *raw_packet = (gree_raw_packet_t *)this->data_read_;
 
-  // если заголовок пакета еще не прочитан, то просматриваем очередь данных в поиске заголовка
-  while (!receiving_packet_ && this->available() >= sizeof(gree_header_t))
-  {
-    // если первый байт не стартовый, то выкидываем его из очереди и уходим на новую итерацию цикла
-    if (this->peek() != GREE_START_BYTE)
-    {
+  while (!receiving_packet_ && this->available() >= sizeof(gree_header_t)) {
+    if (this->peek() != GREE_START_BYTE) {
       this->read(); // читаем байт "в никуда"
       continue;
     }
 
-    // если выполнение дошло сюда, значит один стартовый байт в очереди есть 
-    // и надо проверить ещё и второй байт
-    // читаем оба байта
     this->read_array(this->data_read_, sizeof(gree_start_bytes_t));
-
-    // поднимаем флаг приёма пакета, если второй байт тоже стартовый
     receiving_packet_ = (raw_packet->header.start_bytes.u8x2[1] == GREE_START_BYTE);
     
-    // если второй байт неправильный, значит это не заголовок
-    // и значит эти два байта из буфера будут проигнорированы, так как флаг не поднят
-    // их можно не обнулять в буфере приёма data_read_, так как они всё равно будут перезаписаны в следующий раз, когда встретится стартовый байт
-
-    // если же стартовые байты верные, то из заголовка надо прочитать размер пакета
     if (receiving_packet_) {
-      this.read_byte( &raw_packet->header.data_length );
+      this->read_byte( &raw_packet->header.data_length );
 
-      // проверяем на потенциальное переполнение буфера
-      if (raw_packet->header.data_length + sizeof(gree_header_t) > GREE_RX_BUFFER_SIZE)
-      {
+      if (raw_packet->header.data_length + sizeof(gree_header_t) > GREE_RX_BUFFER_SIZE) {
         ESP_LOGE(TAG, "Incoming packet is too big! header.data_length = %d, maximum is %d", raw_packet->header.data_length, GREE_RX_BUFFER_SIZE - sizeof(gree_header_t));
         receiving_packet_ = false;
         memset(this->data_read_, 0, GREE_RX_BUFFER_SIZE);
@@ -75,22 +58,15 @@ void GreeClimate::loop() {
     }
   }
 
-  // если флаг приёма пакета установлен, значит заголовок уже загружен
-  // ждём, пока в очереди не будет столько же байт, как указано в заголовке
-  // и только после этого читаем (чтобы не дёргать быйты по одному)
-  if (receiving_packet_ && this->available() >= raw_packet->header.data_length)
-  {
-    // загружаем в пакет все данные, которые указаны в заголовке
+  if (receiving_packet_ && this->available() >= raw_packet->header.data_length) {
     this->read_array(raw_packet->data, raw_packet->header.data_length);
 
-    dump_message_("Read array", this->data_read_, raw_packet->header.data_length + sizeof(raw_packet->header.start_bytes));
+    dump_message_("Read array", this->data_read_, raw_packet->header.data_length + sizeof(gree_header_t));
     read_state_(this->data_read_, raw_packet->header.data_length + sizeof(gree_header_t));
     
-    // не забываем после обработки сбросить флаг и обнулить входящий буфер
     receiving_packet_ = false;
     memset(this->data_read_, 0, GREE_RX_BUFFER_SIZE);
   }
-
 }
 
 /*

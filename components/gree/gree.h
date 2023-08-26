@@ -71,7 +71,7 @@ struct gree_raw_packet_t
 {
   gree_header_t header;
   uint8_t data[1]; // first data byte
-}
+};
 
 
 /*
