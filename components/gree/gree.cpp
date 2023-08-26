@@ -8,14 +8,19 @@ namespace gree {
 static const char *const TAG = "gree";
 
 // block of byte positions in requests/answers
+// GrKoR: I recommend change this approach (byte positions) to structures like gree_raw_packet_t.
+// You can use pointers (and type casting) for assignment structure to the data buffer.
+// It will be much much easier to work with structures instead of array and byte positions
 static const uint8_t FORCE_UPDATE = 7;
 static const uint8_t MODE = 8;
 static const uint8_t MODE_MASK = 0b11110000;
 static const uint8_t FAN_MASK = 0b00001111;
 static const uint8_t SWING = 12;
-// change later to data_read/write sizeof ?
+
 static const uint8_t CRC_WRITE = 46;
-static const uint8_t CRC_READ = 49;
+//CRC_READ moved to read_state_ with last bytes because of different length of incoming packets
+//static const uint8_t CRC_READ = 49;
+
 static const uint8_t TEMPERATURE = 9;
 static const uint8_t INDOOR_TEMPERATURE = 46;
 
@@ -30,21 +35,39 @@ void GreeClimate::dump_config() {
   ESP_LOGCONFIG(TAG, "  Update interval: %u", this->get_update_interval());
   this->dump_traits_(TAG);
   this->check_uart_settings(4800, 1, uart::UART_CONFIG_PARITY_EVEN, 8);
-  
 }
 
 void GreeClimate::loop() {
-  if (this->available() >= sizeof(this->data_read_)) {
-    this->read_array(this->data_read_, sizeof(this->data_read_));
-    dump_message_("Read array", this->data_read_, sizeof(this->data_read_));
-    // ignore packets with incorrect start bytes
-    if (this->data_read_[0] != 126 || this->data_read_[1] != 126) {
-      return;
+  gree_raw_packet_t *raw_packet = (gree_raw_packet_t *)this->data_read_;
+
+  while (!receiving_packet_ && this->available() >= sizeof(gree_header_t)) {
+    if (this->peek() != GREE_START_BYTE) {
+      this->read(); // читаем байт "в никуда"
+      continue;
     }
-    // temporary ignore strange packets with 0x33 at [3]
-    if (this->data_read_[3] == 51)
-      return;
-    read_state_(this->data_read_, sizeof(this->data_read_));
+
+    this->read_array(this->data_read_, sizeof(gree_start_bytes_t));
+    receiving_packet_ = (raw_packet->header.start_bytes.u8x2[1] == GREE_START_BYTE);
+    
+    if (receiving_packet_) {
+      this->read_byte( &raw_packet->header.data_length );
+
+      if (raw_packet->header.data_length + sizeof(gree_header_t) > GREE_RX_BUFFER_SIZE) {
+        ESP_LOGE(TAG, "Incoming packet is too big! header.data_length = %d, maximum is %d", raw_packet->header.data_length, GREE_RX_BUFFER_SIZE - sizeof(gree_header_t));
+        receiving_packet_ = false;
+        memset(this->data_read_, 0, GREE_RX_BUFFER_SIZE);
+      }
+    }
+  }
+
+  if (receiving_packet_ && this->available() >= raw_packet->header.data_length) {
+    this->read_array(raw_packet->data, raw_packet->header.data_length);
+
+    dump_message_("Read array", this->data_read_, raw_packet->header.data_length + sizeof(gree_header_t));
+    read_state_(this->data_read_, raw_packet->header.data_length + sizeof(gree_header_t));
+    
+    receiving_packet_ = false;
+    memset(this->data_read_, 0, GREE_RX_BUFFER_SIZE);
   }
 }
 
@@ -96,11 +119,19 @@ climate::ClimateTraits GreeClimate::traits() {
 }
 
 void GreeClimate::read_state_(const uint8_t *data, uint8_t size) {
+  // get checksum byte from received data (using the last byte)
+  uint8_t data_crc = data[size-1];
+  // get checksum byte based on received data (calculating)
+  uint8_t get_crc = get_checksum_(data, size);
 
-  uint8_t check = data[CRC_READ];
-  uint8_t crc = get_checksum_(data, size);
-  if (check != crc) {
+  if (data_crc != get_crc) {
     ESP_LOGW(TAG, "Invalid checksum.");
+    return;
+  }
+
+// now we are using only packets with 0x31 as first data byte
+  if (data[3] != 49) {
+    ESP_LOGW(TAG, "Invalid packet type.");
     return;
   }
 
