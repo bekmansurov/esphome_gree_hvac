@@ -129,6 +129,12 @@ void GreeClimate::read_state_(const uint8_t *data, uint8_t size) {
     return;
   }
 
+// now we are using only packets with 0x31 as first data byte
+  if (data[3] != 49) {
+    ESP_LOGW(TAG, "Invalid packet type.");
+    return;
+  }
+
   this->target_temperature = data[TEMPERATURE] / 16 + MIN_VALID_TEMPERATURE;
   this->current_temperature = data[INDOOR_TEMPERATURE] - 40; // check later?
 
