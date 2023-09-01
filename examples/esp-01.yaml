@@ -1,0 +1,48 @@
+substitutions:
+  name: ac-kitchen
+  friendly_name: AC Kitchen
+
+esphome:
+  name: $name
+  platform: ESP8266
+  board: esp01_1m
+  platformio_options:
+    upload_speed: 115200
+
+wifi:
+  ssid: !secret main_wifi_ssid
+  password: !secret main_wifi_password
+
+external_components:
+  - source: github://bekmansurov/esphome_gree_hvac
+    components: [ gree ]
+    refresh: 0s
+
+logger:
+    #level: INFO
+    level: DEBUG
+    #level: VERY_VERBOSE
+    #level: VERBOSE
+    baud_rate: 0
+
+api:
+
+ota:
+
+web_server:
+  port: 80
+
+uart:
+  tx_pin: GPIO1
+  rx_pin: GPIO2
+  # id: ac_uart
+  baud_rate: 4800
+  data_bits: 8
+  parity: EVEN
+  stop_bits: 1
+
+climate:
+  - platform: gree
+    name: $friendly_name
+    # None only if you set "friendly_name" in substitutions
+    # name: "Kitchen AC"

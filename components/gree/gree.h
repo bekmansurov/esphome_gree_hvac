@@ -27,7 +27,9 @@ enum ac_mode: uint8_t {
 enum ac_fan: uint8_t {
   AC_FAN_AUTO = 0x00,
   AC_FAN_LOW = 0x01,
+  // AC_FAN_MEDIUMLOW = 0x00,
   AC_FAN_MEDIUM = 0x02,
+  // AC_FAN_MEDIUMHIGH = 0x00,
   AC_FAN_HIGH = 0x03
 };
 
@@ -72,6 +74,7 @@ struct gree_raw_packet_t
   gree_header_t header;
   uint8_t data[1]; // first data byte
 };
+
 
 
 /*
